@@ -12,7 +12,8 @@ import os
 import sqlite3
 
 # strategy in https://docs.google.com/document/d/1Z64rx5PmskZ9oHD36wor9tblu1l_oVeXSyFhV1g461o/edit?tab=t.0
-tickers = load_tickers_config()
+current_dir = os.path.dirname(os.path.abspath(__file__))
+tickers = load_tickers_config(os.path.join(current_dir, 'tickers.json'))
 earnings_dates_results = {}
 
 def check_earnings_risk(report_date):
