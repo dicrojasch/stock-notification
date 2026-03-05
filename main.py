@@ -14,7 +14,7 @@ import sqlite3
 # strategy in https://docs.google.com/document/d/1Z64rx5PmskZ9oHD36wor9tblu1l_oVeXSyFhV1g461o/edit?tab=t.0
 current_dir = os.path.dirname(os.path.abspath(__file__))
 tickers = load_tickers_config(os.path.join(current_dir, 'tickers.json'))
-earnings_dates_results = {}
+
 
 def check_earnings_risk(report_date):
     if report_date == "N/A" or report_date == "Error":
@@ -42,7 +42,6 @@ def check_earnings_risk(report_date):
 def process_strategy(ticker_list):
     daily_prices = {}
     four_hour_prices = {}
-    earnings_dates_results = {}
 
     print("Fetching benchmark data (SPY) for Beta calculation...")
     try:
@@ -91,25 +90,6 @@ def process_strategy(ticker_list):
         df_daily.set_index('Date', inplace=True)
         df_1h.set_index('Date', inplace=True)
         
-        # Download earnings date
-        if ticker_sym in ["BTC-USD", "GC=F", "SI=F"]:
-            earnings_dates_results[ticker_sym] = "N/A"
-            print("No Earnings Date")
-        else:
-            try:
-                cal = t.calendar
-                # Check if it is a dict and has the dates key
-                if isinstance(cal, dict) and 'Earnings Date' in cal:
-                    date_list = cal['Earnings Date']
-                    # Take the first date from the list
-                    earnings_dates_results[ticker_sym] = date_list[0] if date_list else "N/A"
-                else:
-                    earnings_dates_results[ticker_sym] = "N/A"
-            except Exception:
-                earnings_dates_results[ticker_sym] = "Error"
-
-            # --- PART B: TECHNICAL CALCULATIONS ---
-            print(check_earnings_risk(earnings_dates_results[ticker_sym]))
         # 1. Daily Indicators (Trend and Volatility)
         df_daily.ta.sma(length=200, append=True)
         df_daily.ta.sma(length=50, append=True)
@@ -157,7 +137,7 @@ def process_strategy(ticker_list):
         daily_prices[ticker_sym] = df_daily
         four_hour_prices[ticker_sym] = df_4h
 
-    return daily_prices, four_hour_prices, earnings_dates_results
+    return daily_prices, four_hour_prices
 
 
 def detect_abnormal_drop(df_daily, k=2.5):
@@ -178,13 +158,13 @@ def detect_abnormal_drop(df_daily, k=2.5):
 # Update of Part C with News Alert
 # Replace your entire execute_advanced_scanner function with this:
 
-def execute_advanced_scanner(daily_prices, four_hour_prices, earnings_dates_results):
+def execute_advanced_scanner(daily_prices, four_hour_prices):
     results = []
 
     for ticker in daily_prices.keys():
         df_d = daily_prices[ticker]
         df_4 = four_hour_prices[ticker]
-        name = df_d['long_name'].iloc[0]
+
         # Safety validation: Ensure enough data
         if df_d.empty or df_4.empty or len(df_d) < 2: continue
 
@@ -222,7 +202,7 @@ def execute_advanced_scanner(daily_prices, four_hour_prices, earnings_dates_resu
         
         # --- 4. RISK FILTERS ---
         abnormal_movement = detect_abnormal_drop(df_d, k=2.5)
-        earnings_status = check_earnings_risk(earnings_dates_results.get(ticker, "N/A"))
+        earnings_status = check_earnings_risk(df_d['earnings_date'].iloc[0])
         danger = abnormal_movement or "⚠️" in earnings_status
         
         active_signals = []
@@ -258,7 +238,8 @@ def execute_advanced_scanner(daily_prices, four_hour_prices, earnings_dates_resu
             
         results.append({
             "Ticker": ticker,
-            "Name": name,
+            "Name": df_d['long_name'].iloc[0],
+            "Earnings_date": df_d['earnings_date'].iloc[0],
             "Price": round(current_price, 2),
             "RSI_4H": round(latest_4['RSI_14'], 2),
             "EMA20_Deviation": f"{round(ema20_distance * 100, 2)}%",
@@ -279,8 +260,8 @@ def execute_advanced_scanner(daily_prices, four_hour_prices, earnings_dates_resu
     return df_results
 
 
-daily_prices, four_hour_prices, earnings_dates_results = process_strategy(tickers)
-results_df = execute_advanced_scanner(daily_prices, four_hour_prices, earnings_dates_results)
+daily_prices, four_hour_prices = process_strategy(tickers)
+results_df = execute_advanced_scanner(daily_prices, four_hour_prices)
 
 message = "\n" + "="*50 + "\n"
 message += "🎯 SCAN RESULTS\n"

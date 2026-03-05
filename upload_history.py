@@ -17,6 +17,20 @@ def fetch_and_save_data(ticker, period, interval, table_suffix):
         ticker_obj = yf.Ticker(ticker)
         long_name = ticker_obj.info.get('longName', ticker)
 
+        # 3. NETWORK REQUEST: EARNINGS (PARALLEL)
+        earnings_date = "N/A"
+        
+        if ticker in ["BTC-USD", "GC=F", "SI=F"]:
+            pass # No earnings for Crypto/Commodities
+        else:
+            try:
+                cal = ticker_obj.calendar
+                if isinstance(cal, dict) and 'Earnings Date' in cal:
+                    date_list = cal['Earnings Date']
+                    earnings_date = date_list[0] if date_list else "N/A"
+            except Exception:
+                earnings_date = "Error"
+
         # 2. Download historical data
         print(f"Downloading {interval} data for {ticker} ({period})...")
         df = yf.download(ticker, period=period, interval=interval, progress=False, auto_adjust=False)
@@ -27,6 +41,7 @@ def fetch_and_save_data(ticker, period, interval, table_suffix):
             
             # 4. Add the requested long_name column
             df['long_name'] = long_name
+            df['earnings_date'] = earnings_date
             df.index.name = 'Date'
             
             # 5. Save to SQLite
