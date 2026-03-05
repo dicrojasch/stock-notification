@@ -5,7 +5,7 @@ import pandas as pd
 import requests
 from pdf2image import convert_from_path
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import landscape, legal
+from reportlab.lib.pagesizes import landscape, elevenSeventeen
 from reportlab.pdfgen import canvas
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 from dotenv import load_dotenv
@@ -38,7 +38,7 @@ def send_pdf_as_image(pdf_path):
 
 def dataframe_to_pdf(df, file_name):
     # Configure document in Landscape
-    doc = SimpleDocTemplate(file_name, pagesize=landscape(legal))
+    doc = SimpleDocTemplate(file_name, pagesize=landscape(elevenSeventeen))
     elements = []
 
     # Convert DataFrame to a list of lists (including headers)

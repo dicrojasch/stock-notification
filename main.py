@@ -43,6 +43,24 @@ def process_strategy(ticker_list):
     daily_prices = {}
     four_hour_prices = {}
     earnings_dates_results = {}
+
+    print("Fetching benchmark data (SPY) for Beta calculation...")
+    try:
+        # Download 1 year of daily data to ensure enough periods for calculation
+        benchmark_data = yf.download("SPY", period="1y", interval="1d", progress=False)
+        
+        # Handle yfinance multi-index columns if present
+        if isinstance(benchmark_data.columns, pd.MultiIndex):
+            benchmark_close = benchmark_data['Close']['SPY']
+        else:
+            benchmark_close = benchmark_data['Close']
+            
+        # Ensure the index is timezone-naive to match your local sqlite data
+        benchmark_close.index = benchmark_close.index.tz_localize(None)
+    except Exception as e:
+        print(f"Error fetching benchmark data: {e}")
+        benchmark_close = pd.Series()
+
     for ticker_sym in ticker_list:
 
         print(f"Processing {ticker_sym}...")
@@ -98,7 +116,32 @@ def process_strategy(ticker_list):
         df_daily.ta.ema(length=20, append=True)
         df_daily.ta.macd(append=True)
         df_daily.ta.atr(length=14, append=True)
-        
+
+        if not benchmark_close.empty:
+            # Align data to ensure dates match perfectly
+            combined_data = pd.concat([df_daily['Close'], benchmark_close], axis=1, sort=False).dropna()
+            combined_data.columns = ['Asset', 'Benchmark']
+            
+            # Calculate daily percentage returns
+            returns_asset = combined_data['Asset'].pct_change()
+            returns_bench = combined_data['Benchmark'].pct_change()
+            
+            # Calculate rolling covariance and variance (20-day window)
+            rolling_cov = returns_asset.rolling(window=20).cov(returns_bench)
+            rolling_var = returns_bench.rolling(window=20).var()
+            
+            # Beta = Covariance / Variance
+            beta_series = rolling_cov / rolling_var
+            
+            # Name the series and join it to the main daily dataframe
+            beta_series.name = 'BETA_20'
+            df_daily = df_daily.join(beta_series)
+            
+            # Fill NaN values (the first 20 days) with 1.0 (neutral market beta)
+            df_daily['BETA_20'] = df_daily['BETA_20'].fillna(1.0)
+        else:
+            df_daily['BETA_20'] = 1.0
+            
         # 2. Convert 1h to 4h and calculate Triggers
         # Group candles: Open (first), High (max), Low (min), Close (last)
         df_4h = df_1h.resample('4h').agg({
@@ -151,7 +194,11 @@ def execute_advanced_scanner(daily_prices, four_hour_prices, earnings_dates_resu
         latest_4 = df_4.iloc[-1]
         
         current_price = latest_d['Close']
-        
+
+        # pandas_ta automatically names the column based on the length (e.g., 'BETA_20')
+        beta_col = 'BETA_20' 
+        current_beta = latest_d[beta_col] if beta_col in latest_d else 1.0
+
         # --- 1. STRUCTURAL TREND FILTER (1D) ---
         is_bullish = False
         if len(df_d) > 200:
@@ -177,7 +224,20 @@ def execute_advanced_scanner(daily_prices, four_hour_prices, earnings_dates_resu
         abnormal_movement = detect_abnormal_drop(df_d, k=2.5)
         earnings_status = check_earnings_risk(earnings_dates_results.get(ticker, "N/A"))
         danger = abnormal_movement or "⚠️" in earnings_status
+        
+        active_signals = []
 
+        # Define your tags: 
+        # T = Trend, P = Pullback, M = MACD, O = Oversold, B = Bollinger
+        if is_bullish: active_signals.append("T")
+        if near_ema20: active_signals.append("P")
+        if growing_macd: active_signals.append("M")
+        if oversold_rsi: active_signals.append("O")
+        if touches_lower_bb: active_signals.append("B")
+
+        # Join them in a single string like "T | P | M"
+        signals_str = " | ".join(active_signals) if active_signals else "None"
+        
         # --- FINAL ALGORITHM EVALUATION ---
         score_percentage = (int(is_bullish) + int(near_ema20) + int(growing_macd) + int(oversold_rsi) + int(touches_lower_bb)) * 20
         master_condition = score_percentage == 100
@@ -202,8 +262,10 @@ def execute_advanced_scanner(daily_prices, four_hour_prices, earnings_dates_resu
             "Price": round(current_price, 2),
             "RSI_4H": round(latest_4['RSI_14'], 2),
             "EMA20_Deviation": f"{round(ema20_distance * 100, 2)}%",
+            "Beta_20": round(current_beta, 2), 
             "Suggested_SL": round(stop_loss, 2),
             "Suggested_TP": round(take_profit, 2),
+            "Signals": signals_str,
             "Score": score_percentage,
             "Status": status,
             "Alert": alert
