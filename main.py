@@ -6,7 +6,7 @@ from upload_tickers import load_tickers_config
 from incremental_add import incremental_update
 from incremental_add import validate_existence
 from upload_history import ensure_ticker_existence
-from telegram import create_pdf, send_document, dataframe_to_pdf, send_pdf_as_image
+from telegram import send_document, dataframe_to_pdf, send_pdf_as_image
 import requests
 import os
 import sqlite3
@@ -141,7 +141,7 @@ def execute_advanced_scanner(daily_prices, four_hour_prices, earnings_dates_resu
     for ticker in daily_prices.keys():
         df_d = daily_prices[ticker]
         df_4 = four_hour_prices[ticker]
-        
+        name = df_d['long_name'].iloc[0]
         # Safety validation: Ensure enough data
         if df_d.empty or df_4.empty or len(df_d) < 2: continue
 
@@ -198,6 +198,7 @@ def execute_advanced_scanner(daily_prices, four_hour_prices, earnings_dates_resu
             
         results.append({
             "Ticker": ticker,
+            "Name": name,
             "Price": round(current_price, 2),
             "RSI_4H": round(latest_4['RSI_14'], 2),
             "EMA20_Deviation": f"{round(ema20_distance * 100, 2)}%",

@@ -5,7 +5,7 @@ import pandas as pd
 import requests
 from pdf2image import convert_from_path
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import landscape, letter
+from reportlab.lib.pagesizes import landscape, legal
 from reportlab.pdfgen import canvas
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 from dotenv import load_dotenv
@@ -36,33 +36,9 @@ def send_pdf_as_image(pdf_path):
         
     return response.json()
 
-def create_pdf(text, file_name):
-    letter_size = landscape(letter)
-    
-    c = canvas.Canvas(file_name, pagesize=letter_size)
-    width, height = letter_size # Width: 612 pts, Height: 792 pts
-    
-    # Start text leaving a 50-point margin
-    textobject = c.beginText(50, height - 50)
-    textobject.setFont("Courier", 8)
-    
-    # Process message line by line
-    for line in text.split('\n'):
-        textobject.textLine(line)
-        
-        # If text gets close to the bottom of the page (bottom margin)
-        if textobject.getY() < 50:
-            c.drawText(textobject)
-            c.showPage() # New page
-            textobject = c.beginText(50, height - 50)
-            textobject.setFont("Courier", 8)
-    
-    c.drawText(textobject)
-    c.save()
-
 def dataframe_to_pdf(df, file_name):
     # Configure document in Landscape
-    doc = SimpleDocTemplate(file_name, pagesize=landscape(letter))
+    doc = SimpleDocTemplate(file_name, pagesize=landscape(legal))
     elements = []
 
     # Convert DataFrame to a list of lists (including headers)
