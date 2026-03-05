@@ -4,3 +4,4 @@ pandas-ta
 requests
 pdf2image
 reportlab
+dotenv

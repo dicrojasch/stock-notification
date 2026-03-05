@@ -8,9 +8,12 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import landscape, letter
 from reportlab.pdfgen import canvas
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
+from dotenv import load_dotenv
 
-TOKEN = "" # Remember to change it for security!
-CHAT_ID = ""
+load_dotenv()
+
+TOKEN = os.getenv("TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
 
 def send_pdf_as_image(pdf_path):
     # 1. Convert PDF to list of images (one per page)
