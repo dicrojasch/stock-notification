@@ -10,6 +10,10 @@ from telegram import send_document, dataframe_to_pdf, send_pdf_as_image
 import requests
 import os
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
+import time
+
 
 # strategy in https://docs.google.com/document/d/1Z64rx5PmskZ9oHD36wor9tblu1l_oVeXSyFhV1g461o/edit?tab=t.0
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -39,106 +43,125 @@ def check_earnings_risk(report_date):
     else:
         return f"Safe ({remaining_days} days)"
 
-def process_strategy(ticker_list):
-    daily_prices = {}
-    four_hour_prices = {}
-
-    print("Fetching benchmark data (SPY) for Beta calculation...")
+def process_single_ticker(ticker_sym, benchmark_close, db_lock):
+    """
+    Processes a single ticker: checks DB, updates data, fetches earnings, 
+    and calculates all technical indicators.
+    """
     try:
-        # Download 1 year of daily data to ensure enough periods for calculation
-        benchmark_data = yf.download("SPY", period="1y", interval="1d", progress=False)
-        
-        # Handle yfinance multi-index columns if present
-        if isinstance(benchmark_data.columns, pd.MultiIndex):
-            benchmark_close = benchmark_data['Close']['SPY']
-        else:
-            benchmark_close = benchmark_data['Close']
+        # 1. DATABASE ZONE (LOCKED)
+        # We use db_lock to prevent multiple threads from writing to SQLite at the same time
+        with db_lock:
+            ensure_ticker_existence(ticker_sym)
+
+            if not validate_existence(ticker_sym, interval="1d") or not validate_existence(ticker_sym, interval="1h"):
+                print(f"Skipping {ticker_sym}: Ticker does not exist in local database")
+                return ticker_sym, None, None, "N/A"
+
+            incremental_update(ticker_sym, interval="1d")
+            incremental_update(ticker_sym, interval="1h")
             
-        # Ensure the index is timezone-naive to match your local sqlite data
-        benchmark_close.index = benchmark_close.index.tz_localize(None)
-    except Exception as e:
-        print(f"Error fetching benchmark data: {e}")
-        benchmark_close = pd.Series()
+            # Using timeout=30 to tell SQLite to wait gracefully if locked
+            conn = sqlite3.connect('trading_data.db', timeout=30)
+            df_daily = pd.read_sql(f"SELECT * FROM \"{ticker_sym}_1d\"", conn, index_col='Date', parse_dates=True)
+            df_1h = pd.read_sql(f"SELECT * FROM \"{ticker_sym}_1h\"", conn, index_col='Date', parse_dates=True)
+            conn.close()
 
-    for ticker_sym in ticker_list:
-
-        print(f"Processing {ticker_sym}...")
-
-        ensure_ticker_existence(ticker_sym)
-
-        if not validate_existence(ticker_sym, interval="1d") or not validate_existence(ticker_sym, interval="1h"):
-            print(f"Skipping {ticker_sym}: Ticker does not exist in local database")
-            continue
-
-        incremental_update(ticker_sym, interval="1d")
-        incremental_update(ticker_sym, interval="1h")
-        
-        t = yf.Ticker(ticker_sym)
-        
-        # --- PART A: DOWNLOAD ---
-        conn = sqlite3.connect('trading_data.db')
-        df_daily = pd.read_sql(f"SELECT * FROM \"{ticker_sym}_1d\"", conn, index_col='Date', parse_dates=True)
-        df_1h = pd.read_sql(f"SELECT * FROM \"{ticker_sym}_1h\"", conn, index_col='Date', parse_dates=True)
-        
-        conn.close()
-
-        # 1. Convert 'Date' column to real datetime
+        # 2. DATA PREPARATION (PARALLEL)
         df_daily['Date'] = pd.to_datetime(df_daily.index)
         df_1h['Date'] = pd.to_datetime(df_1h.index)
-        
-        # 2. Set index as DatetimeIndex
         df_daily.set_index('Date', inplace=True)
         df_1h.set_index('Date', inplace=True)
         
-        # 1. Daily Indicators (Trend and Volatility)
+        # 3. TECHNICAL CALCULATIONS (PARALLEL)
+        # Daily Indicators
         df_daily.ta.sma(length=200, append=True)
         df_daily.ta.sma(length=50, append=True)
         df_daily.ta.ema(length=20, append=True)
         df_daily.ta.macd(append=True)
         df_daily.ta.atr(length=14, append=True)
 
+        # Beta Calculation
         if not benchmark_close.empty:
-            # Align data to ensure dates match perfectly
             combined_data = pd.concat([df_daily['Close'], benchmark_close], axis=1, sort=False).dropna()
             combined_data.columns = ['Asset', 'Benchmark']
             
-            # Calculate daily percentage returns
             returns_asset = combined_data['Asset'].pct_change()
             returns_bench = combined_data['Benchmark'].pct_change()
             
-            # Calculate rolling covariance and variance (20-day window)
             rolling_cov = returns_asset.rolling(window=20).cov(returns_bench)
             rolling_var = returns_bench.rolling(window=20).var()
             
-            # Beta = Covariance / Variance
             beta_series = rolling_cov / rolling_var
-            
-            # Name the series and join it to the main daily dataframe
             beta_series.name = 'BETA_20'
             df_daily = df_daily.join(beta_series)
             
-            # Fill NaN values (the first 20 days) with 1.0 (neutral market beta)
             df_daily['BETA_20'] = df_daily['BETA_20'].fillna(1.0)
         else:
             df_daily['BETA_20'] = 1.0
             
-        # 2. Convert 1h to 4h and calculate Triggers
-        # Group candles: Open (first), High (max), Low (min), Close (last)
+        # 4H Conversion and Indicators
         df_4h = df_1h.resample('4h').agg({
             'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last', 'Volume': 'sum'
         }).dropna()
         df_4h.ta.rsi(length=14, append=True)
         df_4h.ta.bbands(length=20, std=2, append=True)
 
-        # Save results (optional, for Part C)
-        # Here you already have the DataFrames with all the new columns
-        print(f"Calculated indicators for {ticker_sym}")
+        return ticker_sym, df_daily, df_4h
 
-        daily_prices[ticker_sym] = df_daily
-        four_hour_prices[ticker_sym] = df_4h
+    except Exception as e:
+        print(f"Critical error processing {ticker_sym}: {e}")
+        return ticker_sym, None, None, "Error"
+
+
+def process_strategy(ticker_list):
+    daily_prices = {}
+    four_hour_prices = {}
+    earnings_dates_results = {}
+
+    print("Fetching benchmark data (SPY) for Beta calculation...")
+    try:
+        benchmark_data = yf.download("SPY", period="1y", interval="1d", progress=False)
+        if isinstance(benchmark_data.columns, pd.MultiIndex):
+            benchmark_close = benchmark_data['Close']['SPY']
+        else:
+            benchmark_close = benchmark_data['Close']
+        benchmark_close.index = benchmark_close.index.tz_localize(None)
+    except Exception as e:
+        print(f"Error fetching benchmark data: {e}")
+        benchmark_close = pd.Series()
+
+    # Create a single lock object to pass to all threads
+    db_lock = threading.Lock()
+    
+    print(f"Starting parallel processing for {len(ticker_list)} tickers...")
+    
+    # max_workers=5 is a safe limit for yfinance and SQLite
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        # Submit all tasks to the thread pool
+        futures = {
+            executor.submit(process_single_ticker, sym, benchmark_close, db_lock): sym 
+            for sym in ticker_list
+        }
+        
+        # Process results as they complete, regardless of the order
+        for future in as_completed(futures):
+            ticker_sym = futures[future]
+            try:
+                sym, df_d, df_4 = future.result()
+                
+                # If the dataframe is valid, store it in our dictionaries
+                if df_d is not None and not df_d.empty:
+                    daily_prices[sym] = df_d
+                    four_hour_prices[sym] = df_4
+                    print(f"✅ Successfully processed {sym}")
+                else:
+                    print(f"❌ Failed or skipped {sym}")
+                    
+            except Exception as e:
+                print(f"Future error for {ticker_sym}: {e}")
 
     return daily_prices, four_hour_prices
-
 
 def detect_abnormal_drop(df_daily, k=2.5):
     """
@@ -259,7 +282,7 @@ def execute_advanced_scanner(daily_prices, four_hour_prices):
         
     return df_results
 
-
+start_time = time.time()
 daily_prices, four_hour_prices = process_strategy(tickers)
 results_df = execute_advanced_scanner(daily_prices, four_hour_prices)
 
@@ -279,3 +302,12 @@ file_name = f"message_{date_time}.pdf"
 dataframe_to_pdf(results_df, file_name)
 send_pdf_as_image(file_name)
 os.remove(file_name)
+
+end_time = time.time()
+execution_duration = end_time - start_time
+minutes = int(execution_duration // 60)
+seconds = int(execution_duration % 60)
+message += "="*50 + "\n"
+message += f"⏱️ Execution Time: {minutes}m {seconds}s\n"
+message += "="*50 + "\n"
+print(message)
