@@ -3,9 +3,15 @@ from upload_tickers import load_tickers_config
 import sqlite3
 import pandas as pd
 import yfinance as yf
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+DB_PATH = os.getenv('DB_PATH', 'trading_data.db')
 
 def validate_existence(ticker, interval="1d"):
-    conn = sqlite3.connect('trading_data.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     ticker_exists = True
     try:
@@ -25,7 +31,7 @@ def validate_existence(ticker, interval="1d"):
     return ticker_exists
 
 def incremental_update(ticker, interval="1d"):
-    conn = sqlite3.connect('trading_data.db')
+    conn = sqlite3.connect(DB_PATH)
     table = f"{ticker}_1d" if interval == "1d" else f"{ticker}_1h"
 
     try:

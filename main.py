@@ -13,6 +13,11 @@ import sqlite3
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 import time
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+DB_PATH = os.getenv('DB_PATH', 'trading_data.db')
 
 
 # strategy in https://docs.google.com/document/d/1Z64rx5PmskZ9oHD36wor9tblu1l_oVeXSyFhV1g461o/edit?tab=t.0
@@ -62,7 +67,7 @@ def process_single_ticker(ticker_sym, benchmark_close, db_lock):
             incremental_update(ticker_sym, interval="1h")
             
             # Using timeout=30 to tell SQLite to wait gracefully if locked
-            conn = sqlite3.connect('trading_data.db', timeout=30)
+            conn = sqlite3.connect(DB_PATH, timeout=30)
             df_daily = pd.read_sql(f"SELECT * FROM \"{ticker_sym}_1d\"", conn, index_col='Date', parse_dates=True)
             df_1h = pd.read_sql(f"SELECT * FROM \"{ticker_sym}_1h\"", conn, index_col='Date', parse_dates=True)
             conn.close()
@@ -307,7 +312,7 @@ end_time = time.time()
 execution_duration = end_time - start_time
 minutes = int(execution_duration // 60)
 seconds = int(execution_duration % 60)
-message += "="*50 + "\n"
+message = "="*50 + "\n"
 message += f"⏱️ Execution Time: {minutes}m {seconds}s\n"
 message += "="*50 + "\n"
 print(message)

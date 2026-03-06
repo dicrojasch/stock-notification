@@ -3,13 +3,19 @@ import sqlite3
 import pandas as pd
 from datetime import datetime
 from upload_tickers import load_tickers_config
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+DB_PATH = os.getenv('DB_PATH', 'trading_data.db')
 
 def fetch_and_save_data(ticker, period, interval, table_suffix):
     """
     Generic function to download market data and save it to a specific SQLite table.
     Includes the long_name column as requested.
     """
-    conn = sqlite3.connect('trading_data.db')
+    conn = sqlite3.connect(DB_PATH)
     success = False
     
     try:
@@ -71,7 +77,7 @@ def ensure_ticker_existence(ticker):
     """
     Verifies and initializes ticker tables in the database.
     """
-    conn = sqlite3.connect('trading_data.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     # Ensure existence tracking table exists
