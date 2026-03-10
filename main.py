@@ -6,7 +6,7 @@ from upload_tickers import load_tickers_config
 from incremental_add import incremental_update
 from incremental_add import validate_existence
 from upload_history import ensure_ticker_existence
-from telegram import send_document, dataframe_to_pdf, send_pdf_as_image
+from my_telegram import send_document, dataframe_to_pdf, send_pdf_as_image
 import requests
 import os
 import sqlite3
@@ -14,15 +14,30 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 import time
 from dotenv import load_dotenv
+from db_setup import init_db_from_json
 
 # Load environment variables
 load_dotenv()
 DB_PATH = os.getenv('DB_PATH', 'trading_data.db')
 
 
-# strategy in https://docs.google.com/document/d/1Z64rx5PmskZ9oHD36wor9tblu1l_oVeXSyFhV1g461o/edit?tab=t.0
+# Initialize database and seed if necessary
 current_dir = os.path.dirname(os.path.abspath(__file__))
-tickers = load_tickers_config(os.path.join(current_dir, 'tickers.json'))
+init_db_from_json(os.path.join(current_dir, 'tickers.json'), DB_PATH)
+
+# Fetch active tickers from database instead of JSON
+def get_active_tickers(db_path=DB_PATH):
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute('SELECT ticker FROM active_tickers')
+    tickers = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    return tickers
+
+tickers = get_active_tickers(DB_PATH)
+if not tickers:
+    print("No tickers found in database. Exiting.")
+    exit()
 
 
 def check_earnings_risk(report_date):
