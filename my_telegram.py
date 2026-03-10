@@ -7,7 +7,8 @@ from pdf2image import convert_from_path
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import landscape, elevenSeventeen
 from reportlab.pdfgen import canvas
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -40,6 +41,16 @@ def dataframe_to_pdf(df, file_name):
     # Configure document in Landscape
     doc = SimpleDocTemplate(file_name, pagesize=landscape(elevenSeventeen))
     elements = []
+    
+    # Add Header with current date and time
+    styles_sheet = getSampleStyleSheet()
+    header_style = styles_sheet['Heading1']
+    header_style.alignment = 1  # 0=Left, 1=Center, 2=Right
+    
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    header = Paragraph(f"Stock Notification Scan Report - {now}", header_style)
+    elements.append(header)
+    elements.append(Spacer(1, 20))
 
     # Convert DataFrame to a list of lists (including headers)
     table_data = [df.columns.to_list()] + df.values.tolist()
