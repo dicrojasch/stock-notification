@@ -5,3 +5,4 @@ requests
 pdf2image
 reportlab
 python-dotenv  
+python-telegram-bot
