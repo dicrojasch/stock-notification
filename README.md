@@ -56,5 +56,12 @@ A ChatOps interface for managing tickers. See [telegram_bot.md](./telegram_bot.m
 - **Run Scanner**: `python main.py`
 - **Start Management Bot**: `python telegram_bot.py`
 
+### Scheduled Execution (Crontab)
+To run the scanner automatically at 6 AM, 11 AM, and 3 PM (Monday to Friday), use the following configuration:
+
+```bash
+0 6,11,15 * * 1-5 PYTHONIOENCODING=utf-8 /home/diego/repos/stock-notification/.venv/bin/python /home/diego/repos/stock-notification/main.py >> /mnt/disco/mylogs/stock-notification/main.log 2>&1
+```
+
 ## License
 MIT
