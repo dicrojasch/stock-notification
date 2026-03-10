@@ -29,7 +29,7 @@ To ensure the bot runs continuously and restarts automatically, it should be dep
 ### 1. Create the Service File
 
 ```bash
-sudo nano /etc/systemd/system/telegram_bot.service
+sudo vim /etc/systemd/system/telegram_bot.service
 ```
 
 ### 2. Configure the Service
@@ -45,6 +45,7 @@ After=network.target
 User=diego
 WorkingDirectory=/home/diego/repos/stock-notification
 # Path to python inside your virtual environment
+Environment=PYTHONIOENCODING=utf-8
 ExecStart=/home/diego/repos/stock-notification/.venv/bin/python /home/diego/repos/stock-notification/telegram_bot.py
 Restart=always
 RestartSec=10
