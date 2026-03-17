@@ -6,7 +6,7 @@ from upload_tickers import load_tickers_config
 from incremental_add import incremental_update
 from incremental_add import validate_existence
 from upload_history import ensure_ticker_existence
-from my_telegram import send_document, dataframe_to_pdf, send_pdf_as_image
+from telegram_reporter import send_document, dataframe_to_pdf, send_pdf_as_image
 import requests
 import os
 import sqlite3
@@ -23,7 +23,7 @@ DB_PATH = os.getenv('DB_PATH', 'trading_data.db')
 
 # Initialize database and seed if necessary
 current_dir = os.path.dirname(os.path.abspath(__file__))
-init_db_from_json(os.path.join(current_dir, 'tickers.json'), DB_PATH)
+init_db_from_json(os.path.join(current_dir, '../data/tickers.json'), DB_PATH)
 
 # Fetch active tickers from database instead of JSON
 def get_active_tickers(db_path=DB_PATH):

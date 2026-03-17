@@ -11,17 +11,17 @@ An automated Swing Trading scanner that monitors a list of stocks, calculates te
 
 ## System Components
 
-### 1. Main Scanner (`main.py`)
+### 1. Main Scanner (`src/main.py`)
 The core logic that processes stock data, calculates technical indicators, and determines trading signals. It reads the active stock list from the SQLite database.
 
-### 2. Database Setup (`db_setup.py`)
-Handles the migration from static JSON (`tickers.json`) to the SQLite database (`trading_data.db`). It seeds the database on the first run.
+### 2. Database Setup (`src/db_setup.py`)
+Handles the migration from static JSON (`data/tickers.json`) to the SQLite database (`database/trading_data.db`). It seeds the database on the first run.
 
-### 3. Telegram Bot (`telegram_bot.py`)
+### 3. Telegram Bot (`src/telegram_bot.py`)
 A ChatOps interface for managing tickers. See [telegram_bot.md](./telegram_bot.md) for detailed documentation and deployment instructions.
 
 ### 4. Utilities
-- **`my_telegram.py`**: Handles PDF generation and Telegram messaging.
+- **`src/telegram_reporter.py`**: Handles PDF generation and Telegram messaging.
 - **`sql_lite.py`**: Basic SQLite database utilities.
 - **`incremental_add.py`**: Manages efficient historical data updates.
 
@@ -53,14 +53,14 @@ A ChatOps interface for managing tickers. See [telegram_bot.md](./telegram_bot.m
 
 ## Usage
 
-- **Run Scanner**: `python main.py`
-- **Start Management Bot**: `python telegram_bot.py`
+- **Run Scanner**: `python3 src/main.py`
+- **Start Management Bot**: `python3 src/telegram_bot.py`
 
 ### Scheduled Execution (Crontab)
 To run the scanner automatically at 6 AM, 11 AM, and 3 PM (Monday to Friday), use the following configuration:
 
 ```bash
-0 6,11,15 * * 1-5 PYTHONIOENCODING=utf-8 /home/diego/repos/stock-notification/.venv/bin/python /home/diego/repos/stock-notification/main.py >> /mnt/disco/mylogs/stock-notification/main.log 2>&1
+0 6,11,15 * * 1-5 PYTHONIOENCODING=utf-8 /home/diego/repos/stock-notification/.venv/bin/python /home/diego/repos/stock-notification/src/main.py >> /home/diego/repos/stock-notification/main.log 2>&1
 ```
 
 ## License

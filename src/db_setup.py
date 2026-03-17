@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 DB_PATH = os.getenv('DB_PATH', 'trading_data.db')
 
-def init_db_from_json(json_path='tickers.json', db_path=DB_PATH):
+def init_db_from_json(json_path='data/tickers.json', db_path=DB_PATH):
     """
     Initializes the database and seeds the active_tickers table from a JSON file.
     If the table already exists and has data, the JSON file is ignored.
