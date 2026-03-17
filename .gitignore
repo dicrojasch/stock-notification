@@ -165,3 +165,5 @@ cython_debug/
 *.log
 *.pdf
 *.png
+
+database/
