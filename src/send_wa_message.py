@@ -99,9 +99,9 @@ if __name__ == "__main__":
     client = WhatsAppClient()
     
     if not client.api_url or not client.api_key:
-        print("Error: WhatsApp API configuration missing in .env")
+        logger.error("WhatsApp API configuration missing in .env")
     else:
-        print(f"WhatsApp client initialized with API URL: {client.api_url}")
+        logger.info(f"WhatsApp client initialized with API URL: {client.api_url}")
         # Example usage (uncomment to test if you have a valid base64 string):
         # group_id = client.group_id
         # test_message = "Test message from Stock Notification Bot"

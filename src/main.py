@@ -13,10 +13,19 @@ import sqlite3
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 import time
+import logging
 from dotenv import load_dotenv
 from db_setup import init_db_from_json
 from content_handler import ContentHandler
 from send_wa_message import WhatsAppClient
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
@@ -41,7 +50,7 @@ def get_active_tickers(db_path=DB_PATH):
 
 tickers = get_active_tickers(DB_PATH)
 if not tickers:
-    print("No tickers found in database. Exiting.")
+    logger.error("No tickers found in database. Exiting.")
     exit()
 
 
@@ -80,7 +89,7 @@ def process_single_ticker(ticker_sym, benchmark_close, db_lock):
             ensure_ticker_existence(ticker_sym)
 
             if not validate_existence(ticker_sym, interval="1d") or not validate_existence(ticker_sym, interval="1h"):
-                print(f"Skipping {ticker_sym}: Ticker does not exist in local database")
+                logger.warning(f"Skipping {ticker_sym}: Ticker does not exist in local database")
                 return ticker_sym, None, None, "N/A"
 
             incremental_update(ticker_sym, interval="1d")
@@ -135,7 +144,7 @@ def process_single_ticker(ticker_sym, benchmark_close, db_lock):
         return ticker_sym, df_daily, df_4h
 
     except Exception as e:
-        print(f"Critical error processing {ticker_sym}: {e}")
+        logger.error(f"Critical error processing {ticker_sym}: {e}")
         return ticker_sym, None, None, "Error"
 
 
@@ -144,7 +153,7 @@ def process_strategy(ticker_list):
     four_hour_prices = {}
     earnings_dates_results = {}
 
-    print("Fetching benchmark data (SPY) for Beta calculation...")
+    logger.info("Fetching benchmark data (SPY) for Beta calculation...")
     try:
         benchmark_data = yf.download("SPY", period="1y", interval="1d", progress=False)
         if isinstance(benchmark_data.columns, pd.MultiIndex):
@@ -153,13 +162,13 @@ def process_strategy(ticker_list):
             benchmark_close = benchmark_data['Close']
         benchmark_close.index = benchmark_close.index.tz_localize(None)
     except Exception as e:
-        print(f"Error fetching benchmark data: {e}")
+        logger.error(f"Error fetching benchmark data: {e}")
         benchmark_close = pd.Series()
 
     # Create a single lock object to pass to all threads
     db_lock = threading.Lock()
     
-    print(f"Starting parallel processing for {len(ticker_list)} tickers...")
+    logger.info(f"Starting parallel processing for {len(ticker_list)} tickers...")
     
     # max_workers=5 is a safe limit for yfinance and SQLite
     with ThreadPoolExecutor(max_workers=5) as executor:
@@ -179,12 +188,12 @@ def process_strategy(ticker_list):
                 if df_d is not None and not df_d.empty:
                     daily_prices[sym] = df_d
                     four_hour_prices[sym] = df_4
-                    print(f"✅ Successfully processed {sym}")
+                    logger.info(f"✅ Successfully processed {sym}")
                 else:
-                    print(f"❌ Failed or skipped {sym}")
+                    logger.warning(f"❌ Failed or skipped {sym}")
                     
             except Exception as e:
-                print(f"Future error for {ticker_sym}: {e}")
+                logger.error(f"Future error for {ticker_sym}: {e}")
 
     return daily_prices, four_hour_prices
 
@@ -320,23 +329,24 @@ else:
     message += "No processed tickers found.\n"
 message += "="*50 + "\n"
 
-print(message)
+logger.info(message)
 
 date_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 # file_name = f"message_{date_time}.pdf"
 # dataframe_to_pdf(results_df, file_name)
 
-print(f"Converting results to PDF...")
+logger.info(f"Converting results to PDF...")
 pdf_content = ContentHandler.dataframe_to_pdf_content(results_df)
-print(f"Converting PDF to Image Pixmap...")
+logger.info(f"Converting PDF to Image Pixmap...")
 pix = ContentHandler.convert_pdf_to_image(pdf_content=pdf_content)
-print(f"Converting Image Pixmap to Base64...")
+logger.info(f"Converting Image Pixmap to Base64...")
 base64_image = ContentHandler.pix_to_base64(pix)
 
-print(f"Sending to Whatsapp...")
+logger.info(f"Sending to Whatsapp...")
 destination = client.group_id
 text_to_send = f"🎯 *SCAN RESULTS - {date_time}*"
-print(f"Sent to Whatsapp: {client.send_message_base64(destination, text_to_send, base64_image)}")
+wa_result = client.send_message_base64(destination, text_to_send, base64_image)
+logger.info(f"Sent to Whatsapp: {wa_result}")
 
 end_time = time.time()
 execution_duration = end_time - start_time
@@ -345,4 +355,4 @@ seconds = int(execution_duration % 60)
 message = "="*50 + "\n"
 message += f"⏱️ Execution Time: {minutes}m {seconds}s\n"
 message += "="*50 + "\n"
-print(message)
+logger.info(message)

@@ -1,6 +1,7 @@
 import yfinance as yf
 import sqlite3
 import pandas as pd
+import logging
 from datetime import datetime
 from upload_tickers import load_tickers_config
 import os
@@ -9,6 +10,8 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 DB_PATH = os.getenv('DB_PATH', 'trading_data.db')
+
+logger = logging.getLogger(__name__)
 
 def fetch_and_save_data(ticker, period, interval, table_suffix):
     """
@@ -38,7 +41,7 @@ def fetch_and_save_data(ticker, period, interval, table_suffix):
                 earnings_date = "Error"
 
         # 2. Download historical data
-        print(f"Downloading {interval} data for {ticker} ({period})...")
+        logger.info(f"Downloading {interval} data for {ticker} ({period})...")
         df = yf.download(ticker, period=period, interval=interval, progress=False, auto_adjust=False)
 
         if not df.empty:
@@ -53,13 +56,13 @@ def fetch_and_save_data(ticker, period, interval, table_suffix):
             # 5. Save to SQLite
             table_name = f"{ticker}_{table_suffix}"
             df.to_sql(table_name, conn, if_exists='replace', index=True)
-            print(f"✅ {table_name} saved successfully.")
+            logger.info(f"✅ {table_name} saved successfully.")
             success = True
         else:
-            print(f"⚠️ No data found for {ticker} with interval {interval}.")
+            logger.warning(f"⚠️ No data found for {ticker} with interval {interval}.")
 
     except Exception as e:
-        print(f"❌ Error processing {ticker} ({interval}): {e}")
+        logger.error(f"❌ Error processing {ticker} ({interval}): {e}")
     
     finally:
         conn.close()
@@ -101,7 +104,7 @@ def ensure_ticker_existence(ticker):
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
         
         if not cursor.fetchone():
-            print(f"🔍 {table_name} missing. Initializing...")
+            logger.info(f"🔍 {table_name} missing. Initializing...")
             if config['func'](ticker):
                 now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 # Update or insert into existence table
@@ -112,6 +115,6 @@ def ensure_ticker_existence(ticker):
                 ''', (ticker, now))
                 conn.commit()
         else:
-            print(f"💎 {table_name} already exists.")
+            logger.info(f"💎 {table_name} already exists.")
 
     conn.close()

@@ -1,5 +1,8 @@
 import json
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 def load_tickers_config(file_path='tickers.json'):
     """
@@ -10,7 +13,7 @@ def load_tickers_config(file_path='tickers.json'):
     
     # 1. Check if the file exists
     if not os.path.exists(file_path):
-        print(f"⚠️ File {file_path} not found. Creating a new one with a base list...")
+        logger.warning(f"⚠️ File {file_path} not found. Creating a new one with a base list...")
         with open(file_path, 'w') as f:
             json.dump({"tickers": base_tickers}, f, indent=4)
         return base_tickers
@@ -22,5 +25,5 @@ def load_tickers_config(file_path='tickers.json'):
             # Returns the list for the "tickers" key, or the base list if the key doesn't exist
             return config.get("tickers", base_tickers)
     except (json.JSONDecodeError, IOError) as e:
-        print(f"❌ Error parsing JSON file: {e}. Using default list.")
+        logger.error(f"❌ Error parsing JSON file: {e}. Using default list.")
         return base_tickers

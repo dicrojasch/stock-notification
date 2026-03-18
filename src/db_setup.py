@@ -1,11 +1,14 @@
 import sqlite3
 import json
 import os
+import logging
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
 DB_PATH = os.getenv('DB_PATH', 'trading_data.db')
+
+logger = logging.getLogger(__name__)
 
 def init_db_from_json(json_path='data/tickers.json', db_path=DB_PATH):
     """
@@ -30,7 +33,7 @@ def init_db_from_json(json_path='data/tickers.json', db_path=DB_PATH):
         count = cursor.fetchone()[0]
         
         if count == 0:
-            print(f"Database table 'active_tickers' is empty. Seeding from {json_path}...")
+            logger.info(f"Database table 'active_tickers' is empty. Seeding from {json_path}...")
             
             tickers_to_insert = []
             
@@ -40,10 +43,10 @@ def init_db_from_json(json_path='data/tickers.json', db_path=DB_PATH):
                         data = json.load(f)
                         tickers_to_insert = data.get('tickers', [])
                 except (json.JSONDecodeError, IOError) as e:
-                    print(f"Error reading JSON file {json_path}: {e}. Using fallback tickers.")
+                    logger.error(f"Error reading JSON file {json_path}: {e}. Using fallback tickers.")
                     tickers_to_insert = fallback_tickers
             else:
-                print(f"JSON file {json_path} not found. Using fallback tickers.")
+                logger.warning(f"JSON file {json_path} not found. Using fallback tickers.")
                 tickers_to_insert = fallback_tickers
             
             # Insert initial data
@@ -53,17 +56,17 @@ def init_db_from_json(json_path='data/tickers.json', db_path=DB_PATH):
                     [(t,) for t in tickers_to_insert]
                 )
                 conn.commit()
-                print(f"Successfully seeded {len(tickers_to_insert)} tickers into the database.")
+                logger.info(f"Successfully seeded {len(tickers_to_insert)} tickers into the database.")
             else:
-                print("No tickers found to seed.")
+                logger.info("No tickers found to seed.")
         else:
-            print("Database already contains tickers. Skipping seed from JSON.")
+            logger.info("Database already contains tickers. Skipping seed from JSON.")
             
         conn.close()
     except sqlite3.Error as e:
-        print(f"SQLite error: {e}")
+        logger.error(f"SQLite error: {e}")
     except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+        logger.error(f"An unexpected error occurred: {e}")
 
 if __name__ == "__main__":
     # Test initialization
