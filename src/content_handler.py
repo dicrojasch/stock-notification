@@ -23,7 +23,7 @@ class ContentHandler:
         """Converts all pages of the PDF bytes to a single PIL Image, stitched vertically."""
         try:
             # pdf2image.convert_from_bytes returns a list of PIL Images
-            images = convert_from_bytes(pdf_content, dpi=200)
+            images = convert_from_bytes(pdf_content, dpi=300)
             
             if not images:
                 logger.warning("Error: No images generated from PDF")
