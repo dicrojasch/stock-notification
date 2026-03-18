@@ -298,9 +298,9 @@ def execute_advanced_scanner(daily_prices, four_hour_prices):
             "Name": df_d['long_name'].iloc[0],
             "Earnings_date": df_d['earnings_date'].iloc[0],
             "Price": round(current_price, 2),
-            "RSI_4H": round(latest_4['RSI_14'], 2),
-            "EMA20_Deviation": f"{round(ema20_distance * 100, 2)}%",
             "Beta_20": round(current_beta, 2), 
+            "RSI_4H": round(latest_4['RSI_14'], 2),
+            "EMA20_Deviation": round(ema20_distance * 100, 2),
             "Suggested_SL": f"{round(stop_loss, 2)} ({round(((stop_loss / current_price) - 1) * 100, 2)}%)",
             "Suggested_TP": f"{round(take_profit, 2)} (+{round(((take_profit / current_price) - 1) * 100, 2)}%)",
             "Signals": signals_str,
@@ -319,6 +319,41 @@ def execute_advanced_scanner(daily_prices, four_hour_prices):
 start_time = time.time()
 daily_prices, four_hour_prices = process_strategy(tickers)
 results_df = execute_advanced_scanner(daily_prices, four_hour_prices)
+
+if not results_df.empty:
+    # 1. Prepare for sorting - ensure numeric types
+    # Clean Score if it's a string like "60%"
+    if 'Score' in results_df.columns:
+        results_df['Score_num'] = results_df['Score'].astype(str).str.replace('%', '').astype(float)
+    else:
+        results_df['Score_num'] = 0
+
+    # Ensure other columns are numeric for safety
+    for col in ['Beta_20', 'RSI_4H', 'EMA20_Deviation']:
+        if col in results_df.columns:
+            results_df[col] = pd.to_numeric(results_df[col], errors='coerce')
+
+
+    # 2. Sort by specified columns and order
+    sort_cols = ['Score_num', 'Beta_20', 'RSI_4H', 'EMA20_Deviation']
+    ascending = [False, False, True, True]
+    
+    # Filter only columns that actually exist in the dataframe
+    existing_sort_cols = [c for c in sort_cols if c in results_df.columns]
+    existing_ascending = [ascending[sort_cols.index(c)] for c in existing_sort_cols]
+    
+    results_df = results_df.sort_values(by=existing_sort_cols, ascending=existing_ascending)
+    
+    # Remove the helper column
+    if 'Score_num' in results_df.columns:
+        results_df = results_df.drop(columns=['Score_num'])
+
+    # Format EMA20_Deviation with %
+    if 'EMA20_Deviation' in results_df.columns:
+        results_df['EMA20_Deviation'] = results_df['EMA20_Deviation'].astype(str) + "%"
+
+    # 3. Add numbering column at the beginning
+    results_df.insert(0, '#', range(1, len(results_df) + 1))
 
 message = "\n" + "="*50 + "\n"
 message += "🎯 SCAN RESULTS\n"
