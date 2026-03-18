@@ -1,4 +1,5 @@
 import os
+import io
 from datetime import datetime
 
 import pandas as pd
@@ -37,9 +38,12 @@ def send_pdf_as_image(pdf_path):
         
     return response.json()
 
-def dataframe_to_pdf(df, file_name):
-    # Configure document in Landscape
-    doc = SimpleDocTemplate(file_name, pagesize=landscape(elevenSeventeen))
+def dataframe_to_pdf_content(df):
+    """
+    Generates a PDF from a DataFrame and returns the content as bytes.
+    """
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(elevenSeventeen))
     elements = []
     
     # Add Header with current date and time
@@ -84,6 +88,19 @@ def dataframe_to_pdf(df, file_name):
     # Build the PDF
     elements.append(table)
     doc.build(elements)
+    
+    pdf_content = buffer.getvalue()
+    buffer.close()
+    return pdf_content
+
+def dataframe_to_pdf(df, file_name):
+    """
+    Saves the DataFrame as a PDF file.
+    """
+    pdf_content = dataframe_to_pdf_content(df)
+    with open(file_name, 'wb') as f:
+        f.write(pdf_content)
+
 
 def send_document(file_path):
     url = f"https://api.telegram.org/bot{TOKEN}/sendDocument"

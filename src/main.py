@@ -6,7 +6,7 @@ from upload_tickers import load_tickers_config
 from incremental_add import incremental_update
 from incremental_add import validate_existence
 from upload_history import ensure_ticker_existence
-from telegram_reporter import send_document, dataframe_to_pdf, send_pdf_as_image
+from reporter import send_document, dataframe_to_pdf, send_pdf_as_image
 import requests
 import os
 import sqlite3
@@ -15,10 +15,15 @@ import threading
 import time
 from dotenv import load_dotenv
 from db_setup import init_db_from_json
+from content_handler import ContentHandler
+from send_wa_message import WhatsAppClient
 
 # Load environment variables
 load_dotenv()
 DB_PATH = os.getenv('DB_PATH', 'trading_data.db')
+
+# Initialize WhatsApp Client
+client = WhatsAppClient()
 
 
 # Initialize database and seed if necessary
@@ -318,10 +323,20 @@ message += "="*50 + "\n"
 print(message)
 
 date_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-file_name = f"message_{date_time}.pdf"
-dataframe_to_pdf(results_df, file_name)
-send_pdf_as_image(file_name)
-os.remove(file_name)
+# file_name = f"message_{date_time}.pdf"
+# dataframe_to_pdf(results_df, file_name)
+
+print(f"Converting results to PDF...")
+pdf_content = ContentHandler.dataframe_to_pdf_content(results_df)
+print(f"Converting PDF to Image Pixmap...")
+pix = ContentHandler.convert_pdf_to_image(pdf_content=pdf_content)
+print(f"Converting Image Pixmap to Base64...")
+base64_image = ContentHandler.pix_to_base64(pix)
+
+print(f"Sending to Whatsapp...")
+destination = client.group_id
+text_to_send = f"🎯 *SCAN RESULTS - {date_time}*"
+print(f"Sent to Whatsapp: {client.send_message_base64(destination, text_to_send, base64_image)}")
 
 end_time = time.time()
 execution_duration = end_time - start_time

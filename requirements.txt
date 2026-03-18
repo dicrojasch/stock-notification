@@ -4,5 +4,6 @@ pandas-ta
 requests
 pdf2image
 reportlab
-python-dotenv  
+python-dotenv
 python-telegram-bot
+pymupdf
